@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
+import React, { useEffect, useRef, useState } from 'react';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { Terminal as XTerm } from '@xterm/xterm';
+import { Power, Radio, ShieldCheck } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalProps {
@@ -12,63 +13,55 @@ interface TerminalProps {
 export const Terminal: React.FC<TerminalProps> = ({ websocket, onDisconnect }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
+  const [connectedFor, setConnectedFor] = useState(0);
 
   useEffect(() => {
     if (!terminalRef.current) return;
 
-    // Initialize xterm.js
     const xterm = new XTerm({
       cursorBlink: true,
       fontSize: 14,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontFamily: 'JetBrains Mono, Menlo, Monaco, "Courier New", monospace',
       theme: {
-        background: '#0f172a',
-        foreground: '#e2e8f0',
-        cursor: '#8b5cf6',
-        cursorAccent: '#1e293b',
-        black: '#1e293b',
+        background: '#020617',
+        foreground: '#86efac',
+        cursor: '#22c55e',
+        cursorAccent: '#0f172a',
+        black: '#0f172a',
         red: '#ef4444',
-        green: '#10b981',
+        green: '#22c55e',
         yellow: '#f59e0b',
-        blue: '#3b82f6',
-        magenta: '#8b5cf6',
+        blue: '#0ea5e9',
+        magenta: '#a78bfa',
         cyan: '#06b6d4',
-        white: '#e2e8f0',
+        white: '#bbf7d0',
         brightBlack: '#475569',
         brightRed: '#f87171',
-        brightGreen: '#34d399',
+        brightGreen: '#4ade80',
         brightYellow: '#fbbf24',
-        brightBlue: '#60a5fa',
-        brightMagenta: '#a78bfa',
+        brightBlue: '#38bdf8',
+        brightMagenta: '#67e8f9',
         brightCyan: '#22d3ee',
-        brightWhite: '#f1f5f9',
+        brightWhite: '#dcfce7',
       },
       allowProposedApi: true,
     });
 
-    // Add addons
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon();
-
     xterm.loadAddon(fitAddon);
     xterm.loadAddon(webLinksAddon);
 
-    // Open terminal
     xterm.open(terminalRef.current);
     fitAddon.fit();
 
-    // Store references
     xtermRef.current = xterm;
-    fitAddonRef.current = fitAddon;
 
-    // Welcome message
-    xterm.writeln('\x1b[1;35m╔════════════════════════════════════════╗\x1b[0m');
-    xterm.writeln('\x1b[1;35m║      SSH Web Terminal Connected        ║\x1b[0m');
-    xterm.writeln('\x1b[1;35m╚════════════════════════════════════════╝\x1b[0m');
+    xterm.writeln('\x1b[1;32m+------------------------------------------+\x1b[0m');
+    xterm.writeln('\x1b[1;32m|   NETWORK TERMINAL :: SESSION STARTED    |\x1b[0m');
+    xterm.writeln('\x1b[1;32m+------------------------------------------+\x1b[0m');
     xterm.writeln('');
 
-    // Handle terminal resize
     const handleResize = () => {
       fitAddon.fit();
       if (websocket && websocket.readyState === WebSocket.OPEN) {
@@ -82,25 +75,22 @@ export const Terminal: React.FC<TerminalProps> = ({ websocket, onDisconnect }) =
 
     window.addEventListener('resize', handleResize);
 
-    // Handle terminal input
     const disposable = xterm.onData((data) => {
       if (websocket && websocket.readyState === WebSocket.OPEN) {
         websocket.send(JSON.stringify({
           type: 'input',
-          data: data
+          data
         }));
       }
     });
 
-    // Cleanup
     return () => {
       disposable.dispose();
       window.removeEventListener('resize', handleResize);
       xterm.dispose();
     };
-  }, []);
+  }, [websocket]);
 
-  // Handle WebSocket messages
   useEffect(() => {
     if (!websocket || !xtermRef.current) return;
 
@@ -111,17 +101,16 @@ export const Terminal: React.FC<TerminalProps> = ({ websocket, onDisconnect }) =
         if (message.type === 'output' && xtermRef.current) {
           xtermRef.current.write(message.data);
         } else if (message.type === 'error' && xtermRef.current) {
-          xtermRef.current.writeln(`\r\n\x1b[1;31m✖ Error: ${message.message}\x1b[0m\r\n`);
+          xtermRef.current.writeln(`\r\n\x1b[1;31mError: ${message.message}\x1b[0m\r\n`);
         } else if (message.type === 'close') {
           if (xtermRef.current) {
-            xtermRef.current.writeln('\r\n\x1b[1;33m⚠ Connection closed\x1b[0m\r\n');
+            xtermRef.current.writeln('\r\n\x1b[1;33mSession closed\x1b[0m\r\n');
           }
           if (onDisconnect) {
-            setTimeout(onDisconnect, 2000);
+            setTimeout(onDisconnect, 1200);
           }
         }
-      } catch (error) {
-        // Handle binary data (raw SSH output)
+      } catch {
         if (typeof event.data === 'string' && xtermRef.current) {
           xtermRef.current.write(event.data);
         }
@@ -130,16 +119,16 @@ export const Terminal: React.FC<TerminalProps> = ({ websocket, onDisconnect }) =
 
     const handleClose = () => {
       if (xtermRef.current) {
-        xtermRef.current.writeln('\r\n\x1b[1;31m✖ WebSocket connection closed\x1b[0m\r\n');
+        xtermRef.current.writeln('\r\n\x1b[1;31mWebSocket disconnected\x1b[0m\r\n');
       }
       if (onDisconnect) {
-        setTimeout(onDisconnect, 2000);
+        setTimeout(onDisconnect, 1200);
       }
     };
 
     const handleError = () => {
       if (xtermRef.current) {
-        xtermRef.current.writeln('\r\n\x1b[1;31m✖ WebSocket connection error\x1b[0m\r\n');
+        xtermRef.current.writeln('\r\n\x1b[1;31mWebSocket error\x1b[0m\r\n');
       }
     };
 
@@ -147,7 +136,6 @@ export const Terminal: React.FC<TerminalProps> = ({ websocket, onDisconnect }) =
     websocket.addEventListener('close', handleClose);
     websocket.addEventListener('error', handleError);
 
-    // Send initial resize
     if (websocket.readyState === WebSocket.OPEN && xtermRef.current) {
       websocket.send(JSON.stringify({
         type: 'resize',
@@ -163,27 +151,41 @@ export const Terminal: React.FC<TerminalProps> = ({ websocket, onDisconnect }) =
     };
   }, [websocket, onDisconnect]);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setConnectedFor((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedUptime = `${Math.floor(connectedFor / 60)}m ${connectedFor % 60}s`;
+
   return (
     <div className="h-screen w-full bg-slate-950 flex flex-col">
-      <div className="bg-slate-900/90 backdrop-blur-sm border-b border-slate-800 px-6 py-3 flex items-center justify-between">
+      <div className="bg-slate-900/90 backdrop-blur-md border-b border-cyan-400/20 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          <div className="flex items-center gap-2 text-cyan-300">
+            <Radio className="w-4 h-4 animate-pulse" />
+            <span className="text-xs font-semibold tracking-wider uppercase">Live Session</span>
           </div>
-          <span className="text-slate-400 text-sm font-medium">SSH Terminal</span>
+          <div className="hidden sm:flex items-center gap-2 text-slate-400 text-xs">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Encrypted Channel</span>
+            <span className="text-slate-600">|</span>
+            <span>Uptime {formattedUptime}</span>
+          </div>
         </div>
         <button
           onClick={onDisconnect}
-          className="text-slate-400 hover:text-red-400 transition-colors text-sm font-medium"
+          className="inline-flex items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-rose-300 hover:bg-rose-500/20 transition-colors text-sm font-medium"
         >
+          <Power className="w-4 h-4" />
           Disconnect
         </button>
       </div>
       <div
         ref={terminalRef}
-        className="flex-1 overflow-hidden"
+        className="flex-1 overflow-hidden border-t border-slate-800/70"
         style={{ minHeight: 0 }}
       />
     </div>

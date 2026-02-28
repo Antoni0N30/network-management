@@ -85,9 +85,9 @@ export function SSHTerminalPage() {
             isConnecting={state === 'connecting'}
           />
           {error && (
-            <div className="fixed top-20 right-4 bg-red-500/90 text-white px-6 py-3 rounded-lg shadow-lg backdrop-blur-sm border border-red-400/50 max-w-md z-50">
-              <p className="font-medium">Connection Error</p>
-              <p className="text-sm mt-1">{error}</p>
+            <div className="fixed top-20 right-4 bg-rose-900/80 text-rose-100 px-5 py-4 rounded-xl shadow-xl backdrop-blur-md border border-rose-400/40 max-w-md z-50">
+              <p className="font-semibold tracking-wide uppercase text-xs text-rose-300">Connection Error</p>
+              <p className="text-sm mt-1 leading-relaxed">{error}</p>
             </div>
           )}
         </>

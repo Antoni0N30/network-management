@@ -62,7 +62,7 @@ export function ConfigSwitchPage() {
     setGlobalProgress(0);
     setLogs([]);
     displayedLogCountRef.current = 0;
-    addLog('⚡ Avvio configurazione massiva...');
+    addLog('[INFO] Avvio configurazione massiva');
 
     try {
       // Call API to start execution
@@ -88,13 +88,13 @@ export function ConfigSwitchPage() {
       if (data.success && data.process_id) {
         setProcessId(data.process_id);
         setIsRunning(true);
-        addLog(`✅ ${data.message || 'Processo avviato'}`);
+        addLog(`[OK] ${data.message || 'Processo avviato'}`);
         startMonitoring(data.process_id);
       } else {
         throw new Error(data.error || 'Errore avvio processo');
       }
     } catch (error) {
-      addLog(`❌ Errore: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`, 'error');
+      addLog(`[ERROR] ${error instanceof Error ? error.message : 'Errore sconosciuto'}`, 'error');
       setIsRunning(false);
     }
   };
@@ -151,12 +151,12 @@ export function ConfigSwitchPage() {
         if (data.status === 'completed' || data.status === 'error') {
           stopMonitoring();
           setIsRunning(false);
-          addLog(data.status === 'completed' ? '✅ Configurazione completata!' : '❌ Errore durante l\'esecuzione');
+          addLog(data.status === 'completed' ? '[OK] Configurazione completata' : '[ERROR] Errore durante l\'esecuzione');
         }
 
       } catch (error) {
         console.error('Error polling status:', error);
-        addLog(`⚠️ Errore monitoraggio: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`, 'warning');
+        addLog(`[WARN] Errore monitoraggio: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`, 'warning');
       }
     }, 1000);
   };
@@ -177,9 +177,9 @@ export function ConfigSwitchPage() {
       });
       stopMonitoring();
       setIsRunning(false);
-      addLog('⏹️ Operazione interrotta dall\'utente');
+      addLog('[INFO] Operazione interrotta dall\'utente');
     } catch (error) {
-      addLog(`❌ Errore interruzione: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`, 'error');
+      addLog(`[ERROR] Errore interruzione: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`, 'error');
     }
   };
 
@@ -219,7 +219,7 @@ export function ConfigSwitchPage() {
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-3">
-            <Server className="w-8 h-8 text-purple-400" />
+            <Server className="w-8 h-8 text-cyan-300" />
             <h1 className="text-3xl font-bold text-white">ConfigSwitch</h1>
           </div>
           <p className="text-gray-400">Configurazione Massiva Switch di Rete con Advanced Monitoring</p>
@@ -228,9 +228,9 @@ export function ConfigSwitchPage() {
         {/* Two Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* LEFT COLUMN - Configuration */}
-          <Card className="p-6 bg-slate-900/50 backdrop-blur-xl border-purple-500/20">
+          <Card className="p-6 bg-slate-900/55 backdrop-blur-xl border-cyan-400/20">
             <div className="flex items-center gap-2 mb-4">
-              <Server className="w-5 h-5 text-purple-400" />
+              <Server className="w-5 h-5 text-cyan-300" />
               <h2 className="text-xl font-bold text-white">Configurazione</h2>
             </div>
 
@@ -245,7 +245,7 @@ export function ConfigSwitchPage() {
                   value={ipList}
                   onChange={(e) => setIpList(e.target.value)}
                   placeholder="192.168.1.10&#10;192.168.1.11&#10;192.168.1.12"
-                  className="w-full h-24 px-4 py-2 bg-slate-800/50 border border-purple-500/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none font-mono text-sm"
+                  className="w-full h-24 px-4 py-2 bg-slate-800/50 border border-cyan-400/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none font-mono text-sm"
                   disabled={isRunning}
                 />
               </div>
@@ -259,7 +259,7 @@ export function ConfigSwitchPage() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="admin"
-                    className="bg-slate-800/50 border-purple-500/20 text-white"
+                    className="bg-slate-800/50 border-cyan-400/20 text-white"
                     disabled={isRunning}
                   />
                 </div>
@@ -270,7 +270,7 @@ export function ConfigSwitchPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="bg-slate-800/50 border-purple-500/20 text-white"
+                    className="bg-slate-800/50 border-cyan-400/20 text-white"
                     disabled={isRunning}
                   />
                 </div>
@@ -283,7 +283,7 @@ export function ConfigSwitchPage() {
                   value={commands}
                   onChange={(e) => setCommands(e.target.value)}
                   placeholder="configure terminal&#10;vlan 100&#10;name VLAN_TEST&#10;exit&#10;write memory"
-                  className="w-full h-32 px-4 py-2 bg-slate-800/50 border border-purple-500/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none font-mono text-sm"
+                  className="w-full h-32 px-4 py-2 bg-slate-800/50 border border-cyan-400/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none font-mono text-sm"
                   disabled={isRunning}
                 />
               </div>
@@ -293,7 +293,7 @@ export function ConfigSwitchPage() {
                 {!isRunning ? (
                   <Button
                     onClick={handleStart}
-                    className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-3"
+                    className="flex-1 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white font-semibold py-3"
                     disabled={!ipList || !username || !password}
                   >
                     <Play className="w-5 h-5 mr-2" />
@@ -314,9 +314,9 @@ export function ConfigSwitchPage() {
           </Card>
 
           {/* RIGHT COLUMN - Monitoring */}
-          <Card className="p-6 bg-slate-900/50 backdrop-blur-xl border-blue-500/20">
+          <Card className="p-6 bg-slate-900/55 backdrop-blur-xl border-amber-400/20">
             <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="w-5 h-5 text-blue-400" />
+              <TrendingUp className="w-5 h-5 text-amber-300" />
               <h2 className="text-xl font-bold text-white">Monitoraggio Operazioni</h2>
             </div>
 
@@ -327,12 +327,12 @@ export function ConfigSwitchPage() {
                   {switches.length > 0 ? (isRunning ? 'In esecuzione...' : 'Completato') : 'Pronto per l\'esecuzione'}
                 </span>
                 {switches.length > 0 && (
-                  <span className="text-blue-400 font-bold">{Math.round(globalProgress)}%</span>
+                  <span className="text-cyan-300 font-bold">{Math.round(globalProgress)}%</span>
                 )}
               </div>
               <div className="relative h-3 bg-slate-800 rounded-full overflow-hidden">
                 <div
-                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500 rounded-full"
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-cyan-500 to-teal-500 transition-all duration-500 rounded-full"
                   style={{ width: `${globalProgress}%` }}
                 />
               </div>
@@ -361,9 +361,9 @@ export function ConfigSwitchPage() {
         {/* Statistics - Only show when running/completed */}
         {switches.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="p-4 bg-slate-900/50 backdrop-blur-xl border-purple-500/20">
+            <Card className="p-4 bg-slate-900/55 backdrop-blur-xl border-cyan-400/20">
               <div className="flex items-center gap-3">
-                <Server className="w-8 h-8 text-purple-400" />
+                <Server className="w-8 h-8 text-cyan-300" />
                 <div>
                   <p className="text-2xl font-bold text-white">{stats.total}</p>
                   <p className="text-sm text-gray-400">Totale</p>
@@ -388,9 +388,9 @@ export function ConfigSwitchPage() {
                 </div>
               </div>
             </Card>
-            <Card className="p-4 bg-slate-900/50 backdrop-blur-xl border-blue-500/20">
+            <Card className="p-4 bg-slate-900/55 backdrop-blur-xl border-amber-400/20">
               <div className="flex items-center gap-3">
-                <TrendingUp className="w-8 h-8 text-blue-400" />
+                <TrendingUp className="w-8 h-8 text-amber-300" />
                 <div>
                   <p className="text-2xl font-bold text-white">{stats.pending}</p>
                   <p className="text-sm text-gray-400">In Coda</p>
@@ -402,7 +402,7 @@ export function ConfigSwitchPage() {
 
         {/* Switch Cards Grid - Only show when running/completed */}
         {switches.length > 0 && (
-          <Card className="p-6 bg-slate-900/50 backdrop-blur-xl border-purple-500/20">
+          <Card className="p-6 bg-slate-900/55 backdrop-blur-xl border-cyan-400/20">
             <h3 className="text-xl font-bold text-white mb-4">Stato Switch</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {switches.map((sw, index) => (

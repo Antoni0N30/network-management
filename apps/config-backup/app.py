@@ -13,9 +13,11 @@ from flask_cors import CORS
 # Support both module and standalone execution
 try:
     from .routes import bp as routes_bp
+    from .auth_routes import bp as auth_bp
     from . import database
 except ImportError:
     from routes import bp as routes_bp
+    from auth_routes import bp as auth_bp
     import database
 
 
@@ -34,9 +36,17 @@ def create_app():
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'config-backup-secret-key')
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
+    app.config['APP_ENV'] = os.environ.get('APP_ENV', 'development').strip().lower()
+    if app.config['APP_ENV'] == 'production' and app.config['SECRET_KEY'] == 'config-backup-secret-key':
+        raise RuntimeError('SECRET_KEY must be set in production')
 
     # Enable CORS
-    CORS(app, origins=["*"])
+    cors_origins = os.environ.get('CORS_ORIGINS', '*')
+    if cors_origins.strip() == '*':
+        origins = ["*"] if app.config['APP_ENV'] == 'development' else []
+    else:
+        origins = [origin.strip() for origin in cors_origins.split(',') if origin.strip()]
+    CORS(app, origins=origins or ["http://localhost:5173"])
 
     # Setup logging
     setup_logging(app, app_dir)
@@ -50,6 +60,7 @@ def create_app():
 
     # Register blueprint
     app.register_blueprint(routes_bp)
+    app.register_blueprint(auth_bp)
 
     app.logger.info("Config Backup application initialized")
 
@@ -92,8 +103,10 @@ app = create_app()
 
 if __name__ == '__main__':
     # Run development server
+    app_env = os.environ.get('APP_ENV', 'development').strip().lower()
+    debug_mode = app_env == 'development'
     app.run(
         host='0.0.0.0',
         port=5003,
-        debug=True
+        debug=debug_mode
     )

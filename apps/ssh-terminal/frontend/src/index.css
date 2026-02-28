@@ -1,4 +1,5 @@
 /* Tailwind 4 CSS file */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /* Custom dark variant */
@@ -46,20 +47,20 @@
 /* Light theme variables */
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: oklch(0.98 0.01 240);
+  --foreground: oklch(0.23 0.02 250);
+  --card: oklch(0.99 0.01 240);
+  --card-foreground: oklch(0.23 0.02 250);
+  --popover: oklch(0.99 0.01 240);
+  --popover-foreground: oklch(0.23 0.02 250);
+  --primary: oklch(0.62 0.14 210);
+  --primary-foreground: oklch(0.99 0.01 240);
+  --secondary: oklch(0.94 0.02 240);
+  --secondary-foreground: oklch(0.28 0.03 250);
+  --muted: oklch(0.95 0.01 240);
+  --muted-foreground: oklch(0.5 0.02 250);
+  --accent: oklch(0.93 0.04 85);
+  --accent-foreground: oklch(0.28 0.03 250);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
@@ -81,20 +82,20 @@
 
 /* Dark theme variables */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.17 0.02 250);
+  --foreground: oklch(0.96 0.01 245);
+  --card: oklch(0.22 0.02 250);
+  --card-foreground: oklch(0.96 0.01 245);
+  --popover: oklch(0.22 0.02 250);
+  --popover-foreground: oklch(0.96 0.01 245);
+  --primary: oklch(0.7 0.13 205);
+  --primary-foreground: oklch(0.2 0.02 250);
+  --secondary: oklch(0.28 0.02 250);
+  --secondary-foreground: oklch(0.96 0.01 245);
+  --muted: oklch(0.26 0.01 250);
+  --muted-foreground: oklch(0.72 0.01 245);
+  --accent: oklch(0.75 0.12 85);
+  --accent-foreground: oklch(0.2 0.02 250);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
@@ -121,6 +122,18 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Space Grotesk', sans-serif;
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(34, 211, 238, 0.08), transparent 35%),
+      radial-gradient(circle at 80% 0%, rgba(251, 191, 36, 0.08), transparent 35%),
+      linear-gradient(180deg, rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.02));
+    background-attachment: fixed;
+  }
+
+  code,
+  pre,
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
   }
 }
 

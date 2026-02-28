@@ -2,6 +2,7 @@
 import sqlite3
 import os
 from datetime import datetime
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,61 @@ def init_db():
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_backups_ip ON backups(ip)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_backups_timestamp ON backups(timestamp DESC)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_backups_hash ON backups(hash_config)')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS auth_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            refresh_jti TEXT NOT NULL UNIQUE,
+            expires_at INTEGER NOT NULL,
+            revoked INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_auth_sessions_jti ON auth_sessions(refresh_jti)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(username)')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS revoked_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token_jti TEXT NOT NULL UNIQUE,
+            token_type TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_revoked_tokens_jti ON revoked_tokens(token_jti)')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_ts DATETIME DEFAULT CURRENT_TIMESTAMP,
+            username TEXT,
+            role TEXT,
+            action TEXT NOT NULL,
+            resource TEXT,
+            outcome TEXT NOT NULL,
+            ip_address TEXT,
+            details_json TEXT
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(event_ts DESC)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(username)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)')
 
     conn.commit()
     conn.close()
@@ -287,3 +343,184 @@ def delete_backup(backup_id):
     conn.close()
 
     return deleted > 0
+
+
+def get_user_by_username(username):
+    """Get user by username."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT id, username, password_hash, role, is_active, created_at, updated_at FROM users WHERE username = ?',
+        (username,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def create_user(username, password_hash, role):
+    """Create a user."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO users (username, password_hash, role, is_active) VALUES (?, ?, ?, 1)',
+        (username, password_hash, role),
+    )
+    user_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return user_id
+
+
+def count_users():
+    """Return number of users."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) AS count FROM users')
+    row = cursor.fetchone()
+    conn.close()
+    return int(row['count']) if row else 0
+
+
+def create_auth_session(username, refresh_jti, expires_at):
+    """Create refresh session row."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT INTO auth_sessions (username, refresh_jti, expires_at, revoked) VALUES (?, ?, ?, 0)',
+        (username, refresh_jti, int(expires_at)),
+    )
+    session_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return session_id
+
+
+def get_auth_session(refresh_jti):
+    """Get refresh session by jti."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT id, username, refresh_jti, expires_at, revoked, created_at FROM auth_sessions WHERE refresh_jti = ?',
+        (refresh_jti,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def revoke_auth_session(refresh_jti):
+    """Revoke refresh session."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'UPDATE auth_sessions SET revoked = 1 WHERE refresh_jti = ?',
+        (refresh_jti,),
+    )
+    updated = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return updated > 0
+
+
+def revoke_all_sessions_for_user(username):
+    """Revoke all refresh sessions for a user."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'UPDATE auth_sessions SET revoked = 1 WHERE username = ?',
+        (username,),
+    )
+    updated = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return updated
+
+
+def add_revoked_token(token_jti, token_type, expires_at):
+    """Store revoked access/refresh token jti."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'INSERT OR IGNORE INTO revoked_tokens (token_jti, token_type, expires_at) VALUES (?, ?, ?)',
+        (token_jti, token_type, int(expires_at)),
+    )
+    conn.commit()
+    conn.close()
+
+
+def is_token_revoked(token_jti):
+    """Check whether token jti is revoked."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT 1 FROM revoked_tokens WHERE token_jti = ? LIMIT 1',
+        (token_jti,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row is not None
+
+
+def purge_expired_auth_rows(now_ts=None):
+    """Purge expired sessions/revocations to keep DB small."""
+    now_ts = int(now_ts or datetime.utcnow().timestamp())
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM auth_sessions WHERE expires_at < ?', (now_ts,))
+    cursor.execute('DELETE FROM revoked_tokens WHERE expires_at < ?', (now_ts,))
+    conn.commit()
+    conn.close()
+
+
+def add_audit_log(action, outcome, username=None, role=None, resource=None, ip_address=None, details=None):
+    """Insert audit event."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    details_json = json.dumps(details or {}, ensure_ascii=True)
+    cursor.execute(
+        '''
+        INSERT INTO audit_logs (username, role, action, resource, outcome, ip_address, details_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''',
+        (username, role, action, resource, outcome, ip_address, details_json),
+    )
+    log_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return log_id
+
+
+def get_audit_logs(limit=100, offset=0, username=None, action=None):
+    """Get paginated audit logs."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    params = []
+    where = []
+    if username:
+        where.append('username = ?')
+        params.append(username)
+    if action:
+        where.append('action = ?')
+        params.append(action)
+    where_clause = f"WHERE {' AND '.join(where)}" if where else ''
+    query = f'''
+        SELECT id, event_ts, username, role, action, resource, outcome, ip_address, details_json
+        FROM audit_logs
+        {where_clause}
+        ORDER BY event_ts DESC
+        LIMIT ? OFFSET ?
+    '''
+    params.extend([limit, offset])
+    cursor.execute(query, tuple(params))
+    rows = cursor.fetchall()
+    conn.close()
+    result = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item['details'] = json.loads(item.pop('details_json') or '{}')
+        except Exception:
+            item['details'] = {}
+        result.append(item)
+    return result

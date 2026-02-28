@@ -3,10 +3,12 @@ from flask import Blueprint, request, jsonify, render_template, send_from_direct
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import ipaddress
+import os
 import requests
 
 # Support both module and standalone execution
 try:
+    from .auth import require_role, get_request_identity
     from .ssh_manager import SSHManager
     from .backup_manager import (
         save_backup,
@@ -15,9 +17,15 @@ try:
         get_latest_diff,
         BACKUPS_DIR,
     )
-    from .csv_parser import parse_pdv_csv, get_site_by_id, get_sites_dropdown
+    from .csv_parser import (
+        parse_pdv_csv,
+        get_site_by_id,
+        get_sites_dropdown,
+        get_all_credentials_for_site,
+    )
     from . import database
 except ImportError:
+    from auth import require_role, get_request_identity
     from ssh_manager import SSHManager
     from backup_manager import (
         save_backup,
@@ -34,6 +42,19 @@ logger = logging.getLogger(__name__)
 bp = Blueprint('config_backup', __name__)
 
 
+def _audit(action, outcome, resource='config-backup', details=None):
+    identity = get_request_identity()
+    database.add_audit_log(
+        action=action,
+        outcome=outcome,
+        username=identity.get('username'),
+        role=identity.get('role'),
+        resource=resource,
+        ip_address=request.remote_addr,
+        details=details or {},
+    )
+
+
 @bp.route('/')
 def index():
     """Serve main UI"""
@@ -41,6 +62,7 @@ def index():
 
 
 @bp.route('/api/sites', methods=['GET'])
+@require_role('viewer')
 def get_sites():
     """
     Get list of sites from Pdv.CSV for dropdown.
@@ -67,6 +89,7 @@ def get_sites():
 
 
 @bp.route('/api/backup', methods=['POST'])
+@require_role('operator')
 def create_backup():
     """
     Create backup for a single device.
@@ -88,6 +111,9 @@ def create_backup():
     username = data.get('username')
     password = data.get('password')
     use_core = data.get('use_core', True)
+
+    audit_success = False
+    audit_logged = False
 
     # If sito provided, load credentials from CSV
     if sito and not ip:
@@ -137,6 +163,7 @@ def create_backup():
             connection_method=connection_method
         )
 
+        audit_success = True
         return jsonify({
             'success': True,
             **result,
@@ -144,14 +171,20 @@ def create_backup():
 
     except Exception as e:
         logger.error(f"Backup failed for {ip}: {e}")
+        _audit('backup.single', 'failed', details={'ip': ip, 'error': str(e)})
+        audit_logged = True
         return jsonify({
             'success': False,
             'error': str(e),
             'ip': ip,
         }), 500
+    finally:
+        if ip and not audit_logged:
+            _audit('backup.single', 'success' if audit_success else 'failed', details={'ip': ip, 'sito': sito})
 
 
 @bp.route('/api/backup/subnet', methods=['POST'])
+@require_role('operator')
 def create_subnet_backup():
     """
     Create backups for all devices in a subnet.
@@ -233,17 +266,20 @@ def create_subnet_backup():
             else:
                 failed.append(result)
 
-    return jsonify({
+    response = {
         'success': True,
         'total': len(ips),
         'successful': len(results),
         'failed_count': len(failed),
         'results': results,
         'failed': failed,
-    })
+    }
+    _audit('backup.subnet', 'success', details={'subnet': subnet_str, 'successful': len(results), 'failed': len(failed)})
+    return jsonify(response)
 
 
 @bp.route('/api/backups', methods=['GET'])
+@require_role('viewer')
 def list_backups():
     """
     Get list of backups with optional filtering.
@@ -272,6 +308,7 @@ def list_backups():
 
 
 @bp.route('/api/backups/<int:backup_id>', methods=['GET'])
+@require_role('viewer')
 def get_backup(backup_id):
     """
     Get backup details by ID.
@@ -302,6 +339,7 @@ def get_backup(backup_id):
 
 
 @bp.route('/api/diff/<int:backup_id_1>/<int:backup_id_2>', methods=['GET'])
+@require_role('viewer')
 def get_diff(backup_id_1, backup_id_2):
     """
     Get diff between two specific backups.
@@ -321,6 +359,7 @@ def get_diff(backup_id_1, backup_id_2):
 
 
 @bp.route('/api/diff/latest/<sito>', methods=['GET'])
+@require_role('viewer')
 def get_latest_site_diff(sito):
     """
     Get diff between the two most recent backups for a site.
@@ -340,6 +379,7 @@ def get_latest_site_diff(sito):
 
 
 @bp.route('/api/backups/<int:backup_id>/download', methods=['GET'])
+@require_role('viewer')
 def download_backup(backup_id):
     """
     Download backup file.
@@ -367,6 +407,7 @@ def download_backup(backup_id):
 
 
 @bp.route('/api/backup/discover-and-backup', methods=['POST'])
+@require_role('operator')
 def discover_and_backup():
     """
     Discover devices in subnet then backup configurations.
@@ -444,7 +485,7 @@ def discover_and_backup():
 
     # Step 1: Discovery
     logger.info(f"Starting discovery for subnet: {subnet}")
-    discovery_result = call_discovery_api(subnet)
+    discovery_result = call_discovery_api(subnet, request.headers.get('Authorization', ''))
 
     if not discovery_result.get('success'):
         return jsonify({
@@ -587,7 +628,11 @@ def discover_and_backup():
 
     # Summary
     logger.info(f"Subnet backup completed: {len(results)} success, {len(failed)} failed")
-
+    _audit(
+        'backup.discover_and_backup',
+        'success',
+        details={'subnet': subnet, 'devices_to_backup': len(devices_to_backup), 'successful': len(results), 'failed': len(failed)},
+    )
     return jsonify({
         'success': True,
         'discovery': {
@@ -605,7 +650,7 @@ def discover_and_backup():
     })
 
 
-def call_discovery_api(subnet):
+def call_discovery_api(subnet, auth_header=''):
     """
     Call the existing Huawei Network Discovery API.
 
@@ -615,34 +660,40 @@ def call_discovery_api(subnet):
     Returns:
         dict: Discovery results with devices list
     """
-    try:
-        # Call discovery API (runs on same server via nginx)
-        response = requests.post(
-            'http://localhost/api/discover',
-            json={'network': subnet, 'sync': True},
-            timeout=180  # Discovery can take 2-3 minutes for /24
-        )
+    configured = os.environ.get('DISCOVERY_API_URL', 'http://localhost:5004/api/discover')
+    fallback = 'http://localhost/api/discover'
+    urls = [configured]
+    if configured != fallback:
+        urls.append(fallback)
 
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return {
-                'success': False,
-                'error': f'Discovery API returned {response.status_code}'
-            }
+    for url in urls:
+        try:
+            response = requests.post(
+                url,
+                json={'network': subnet, 'sync': True},
+                headers={'Authorization': auth_header} if auth_header else None,
+                timeout=180  # Discovery can take 2-3 minutes for /24
+            )
 
-    except requests.exceptions.Timeout:
-        logger.error(f"Discovery timeout for subnet {subnet}")
-        return {'success': False, 'error': 'Discovery timeout'}
-    except requests.exceptions.ConnectionError as e:
-        logger.error(f"Cannot connect to discovery API: {e}")
-        return {'success': False, 'error': 'Cannot connect to discovery API'}
-    except Exception as e:
-        logger.error(f"Discovery API call failed: {e}")
-        return {'success': False, 'error': str(e)}
+            if response.status_code == 200:
+                return response.json()
+
+            logger.warning(f"Discovery API {url} returned {response.status_code}")
+        except requests.exceptions.Timeout:
+            logger.error(f"Discovery timeout for subnet {subnet} via {url}")
+            return {'success': False, 'error': 'Discovery timeout'}
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(f"Cannot connect to discovery API {url}: {e}")
+            continue
+        except Exception as e:
+            logger.warning(f"Discovery API call failed on {url}: {e}")
+            continue
+
+    return {'success': False, 'error': 'Cannot connect to discovery API'}
 
 
 @bp.route('/api/health', methods=['GET'])
+@require_role('viewer')
 def health_check():
     """Health check endpoint"""
     return jsonify({

@@ -1147,9 +1147,11 @@
     </div>
 
     <script>
-        // API URLs - configure via environment or edit for your deployment
+        // API URLs - configurable from browser localStorage
+        // localStorage key: nms_discovery_api (example: http://localhost:5004)
+        const DISCOVERY_BASE = localStorage.getItem('nms_discovery_api') || 'http://localhost:5004';
         const SERVER_BASE = window.location.origin;
-        const API_URL = SERVER_BASE + '/api/discover';
+        const API_URL = DISCOVERY_BASE + '/api/discover';
         let isProcessing = false;
         const MONITOR_API_URL = SERVER_BASE + ':5001/api/monitoring/add';
         const STATUS_API_URL = SERVER_BASE + ':5001/api/monitoring/status';
